@@ -31,5 +31,5 @@
         ]
     },
     "minimum-stability": "stable",
-    "readme": "php/README.md"
+    "readme": "README.md"
 }
