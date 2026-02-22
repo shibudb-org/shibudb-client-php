@@ -1,0 +1,35 @@
+{
+    "name": "shibudb-org/shibudb-client-php",
+    "description": "A comprehensive PHP client for ShibuDb database with authentication, key-value operations, vector similarity search, and connection pooling",
+    "version": "1.0.0",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "ShibuDb Team",
+            "email": "support@shibudb.com"
+        }
+    ],
+    "homepage": "https://github.com/shibudb-org/shibudb-clients",
+    "support": {
+        "issues": "https://github.com/shibudb-org/shibudb-clients/issues",
+        "source": "https://github.com/shibudb-org/shibudb-clients"
+    },
+    "keywords": [
+        "database",
+        "key-value",
+        "vector",
+        "similarity-search",
+        "shibudb"
+    ],
+    "require": {
+        "php": ">=5.6"
+    },
+    "autoload": {
+        "files": [
+            "php/ShibuDbClient.php"
+        ]
+    },
+    "minimum-stability": "stable",
+    "readme": "php/README.md"
+}
