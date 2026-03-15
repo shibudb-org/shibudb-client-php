@@ -1,0 +1,182 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers on tags like v1.0.0, v1.0.1, etc.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Get version from tag or input
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Extract version from tag (remove 'v' prefix if present)
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            VERSION="${VERSION#refs/tags/}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+          echo "Tag: v$VERSION"
+      
+      - name: Validate version format
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: Invalid version format. Expected format: X.Y.Z (e.g., 1.0.0)"
+            exit 1
+          fi
+      
+      - name: Update composer.json version
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          # Update version in composer.json
+          if command -v jq &> /dev/null; then
+            jq --arg version "$VERSION" '.version = $version' composer.json > composer.json.tmp && mv composer.json.tmp composer.json
+          else
+            # Fallback: use sed (works on most systems)
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+              sed -i '' "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" composer.json
+            else
+              sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" composer.json
+            fi
+          fi
+          echo "Updated composer.json version to $VERSION"
+          cat composer.json | grep -A 1 '"version"'
+      
+      - name: Verify version in composer.json
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          COMPOSER_VERSION=$(grep -o '"version": "[^"]*"' composer.json | cut -d'"' -f4)
+          if [ "$COMPOSER_VERSION" != "$VERSION" ]; then
+            echo "❌ Error: Version mismatch! Expected $VERSION but found $COMPOSER_VERSION in composer.json"
+            exit 1
+          fi
+          echo "✅ Version verified: $COMPOSER_VERSION"
+      
+      - name: Commit version update and create tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          TAG="${{ steps.get_version.outputs.tag }}"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Get the current branch name
+          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          echo "Current branch: $CURRENT_BRANCH"
+          
+          # Commit the version update to the branch
+          git add composer.json
+          git commit -m "chore: bump version to $VERSION" || exit 0
+          git push origin "$CURRENT_BRANCH" || exit 0
+          
+          # Create and push the tag (from the current commit with updated version)
+          git tag -a "$TAG" -m "Release $VERSION"
+          git push origin "$TAG"
+          
+          echo "✅ Created tag $TAG with version $VERSION"
+          echo "✅ Updated $CURRENT_BRANCH branch with version $VERSION"
+      
+      - name: Verify tag has correct version
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${{ steps.get_version.outputs.tag }}"
+          VERSION="${{ steps.get_version.outputs.version }}"
+          
+          # Checkout the tag to verify composer.json
+          git checkout "$TAG"
+          COMPOSER_VERSION=$(grep -o '"version": "[^"]*"' composer.json | cut -d'"' -f4)
+          
+          if [ "$COMPOSER_VERSION" != "$VERSION" ]; then
+            echo "⚠️  Warning: Tag $TAG has version $COMPOSER_VERSION in composer.json, expected $VERSION"
+            echo "This may cause Packagist to show incorrect version. Please ensure composer.json is updated before tagging."
+          else
+            echo "✅ Tag $TAG has correct version $VERSION in composer.json"
+          fi
+          
+          # Checkout back to the tag for release
+          git checkout "$TAG"
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          TAG="${{ steps.get_version.outputs.tag }}"
+          
+          # Get previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "This appears to be the first release."
+            CHANGELOG="## Release $VERSION
+
+Initial release of ShibuDb PHP Client.
+
+### Features
+- Authentication & User Management
+- Key-Value Operations
+- Vector Similarity Search
+- Space Management
+- Connection Pooling
+- PHP 5.6+ Compatibility"
+          else
+            echo "Previous tag: $PREVIOUS_TAG"
+            # Generate changelog from commits since previous tag
+            CHANGELOG="## Release $VERSION
+
+### Changes since $PREVIOUS_TAG
+
+$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:'- %s' --no-merges)"
+          fi
+          
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.tag }}
+          name: Release ${{ steps.get_version.outputs.version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+          files: |
+            ShibuDbClient.php
+            README.md
+            LICENSE
+            composer.json
+      
+      - name: Verify release
+        run: |
+          echo "✅ Release ${{ steps.get_version.outputs.version }} created successfully"
+          echo "Tag: ${{ steps.get_version.outputs.tag }}"
+          echo "GitHub Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.tag }}"
+          echo ""
+          echo "📦 Packagist Publishing:"
+          echo "   If your repository is connected to Packagist, the release should be automatically detected."
+          echo "   To manually update Packagist, visit:"
+          echo "   https://packagist.org/packages/shibudb-org/shibudb-client-php"
+          echo "   and click 'Update' or configure webhook: ${{ github.server_url }}/${{ github.repository }}.git"

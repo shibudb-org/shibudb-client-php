@@ -160,6 +160,32 @@ function vectorTest(&$passed, &$failed)
             $failed
         );
 
+        $response = $client->deleteVector(2);
+        testAssert(
+            isset($response['status']) && $response['status'] === 'OK',
+            'Delete Vector',
+            $passed,
+            $failed
+        );
+
+        $response = $client->getVector(2);
+        $deletedGone = (isset($response['status']) && $response['status'] !== 'OK')
+            || (isset($response['status']) && $response['status'] === 'OK' && empty($response['value']));
+        testAssert(
+            $deletedGone,
+            'Get Vector after delete returns error or no value',
+            $passed,
+            $failed
+        );
+
+        $response = $client->searchTopk($queryVector, 3);
+        testAssert(
+            isset($response['status']) || isset($response['message']),
+            'Search TopK after delete',
+            $passed,
+            $failed
+        );
+
         $client->close();
         testAssert(true, 'Close connection', $passed, $failed);
 

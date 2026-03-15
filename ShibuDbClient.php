@@ -430,6 +430,27 @@ class ShibuDbClient
     }
 
     /**
+     * Delete a vector by ID from a vector space
+     *
+     * @param int|string   $vectorId ID of the vector to delete
+     * @param string|null $space    Space name (uses current space if not specified)
+     * @return array Response from server
+     */
+    public function deleteVector($vectorId, $space = null)
+    {
+        $spaceName = $this->_resolveSpace($space);
+
+        $query = array(
+            'type' => 'DELETE_VECTOR',
+            'key' => (string) $vectorId,
+            'space' => $spaceName,
+            'user' => isset($this->currentUser['username']) ? $this->currentUser['username'] : ''
+        );
+
+        return $this->_sendQuery($query);
+    }
+
+    /**
      * Create a new user (admin only)
      *
      * @param array $user User array with keys: username, password, role, permissions

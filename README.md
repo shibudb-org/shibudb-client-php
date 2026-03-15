@@ -150,6 +150,9 @@ echo $results['message'];  // Search results
 
 // Range search
 $results = $client->rangeSearch(array(0.1, 0.2, 0.3, /* ... */), 0.5);
+
+// Delete a vector by ID
+$client->deleteVector(1);
 ```
 
 ## API Reference
@@ -188,6 +191,7 @@ $client->insertVector($vectorId, $vector, $space = null) -> array
 $client->searchTopk($queryVector, $k = 1, $space = null) -> array
 $client->rangeSearch($queryVector, $radius, $space = null) -> array
 $client->getVector($vectorId, $space = null) -> array
+$client->deleteVector($vectorId, $space = null) -> array
 ```
 
 #### User Management (Admin Only)
@@ -257,7 +261,10 @@ function main() {
         $queryVector = array_fill(0, 128, 0.1);
         $results = $client->searchTopk($queryVector, 5);
         echo "Search results: " . print_r($results, true);
-        
+
+        // Delete a vector by ID when no longer needed
+        $client->deleteVector(1);
+
         $client->close();
         
     } catch (ShibuDbException $e) {

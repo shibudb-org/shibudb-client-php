@@ -78,6 +78,9 @@ function vectorTest()
         $message = isset($response['message']) ? $response['message'] : print_r($response, true);
         echo "Search: $message\n";
 
+        $response = $client->deleteVector(2);
+        echo "Delete Vector 2: " . (isset($response['status']) ? $response['status'] : 'N/A') . "\n";
+
         $client->close();
         echo "Vector test completed successfully!\n";
 
